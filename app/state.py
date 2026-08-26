@@ -27,8 +27,15 @@ class EstadoApp:
         with self._lock:
             return self._id_job_activo == job_id
 
-    def actualizar(self, job_id: str, url: str, estado: str, mensaje: str = "") -> None:
+    def actualizar(
+        self, job_id: str, url: str, estado: str, mensaje: str = "", titulo: str = ""
+    ) -> None:
         with self._lock:
+            titulo_previo = (
+                self._estado_actual.get("titulo", "")
+                if self._estado_actual and self._estado_actual.get("id") == job_id
+                else ""
+            )
             self._id_job_activo = job_id
             ahora = time.time()
             self._estado_actual = {
@@ -36,6 +43,7 @@ class EstadoApp:
                 "url": url,
                 "estado": estado,
                 "mensaje": mensaje,
+                "titulo": titulo or titulo_previo,
                 "iniciado_at": ahora,
                 "actualizado_at": ahora,
             }

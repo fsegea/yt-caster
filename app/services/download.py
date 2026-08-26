@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import re
 import signal
@@ -37,6 +38,19 @@ class DescargaService:
     def _borrar_video_si_existe(self) -> None:
         if os.path.exists(self.config.ruta_video):
             os.remove(self.config.ruta_video)
+        if os.path.exists(self.config.ruta_info):
+            os.remove(self.config.ruta_info)
+
+    def _extraer_titulo(self, url: str) -> str:
+        try:
+            with open(self.config.ruta_info) as f:
+                data = json.load(f)
+            return data.get("title") or url
+        except (FileNotFoundError, json.JSONDecodeError):
+            return url
+        finally:
+            if os.path.exists(self.config.ruta_info):
+                os.remove(self.config.ruta_info)
 
     async def _leer_salida(self, proc, job_id: str, url: str) -> None:
         tarea_stderr = asyncio.create_task(self._leer_stderr(proc))
@@ -75,6 +89,7 @@ class DescargaService:
             "-f", "bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[height<=720]",
             "--merge-output-format", "mp4",
             "-o", self.config.ruta_video,
+            "--write-info-json",
             "--newline",
             "--progress",
             "--", url,
@@ -105,4 +120,5 @@ class DescargaService:
             )
             return
 
-        self.estado.actualizar(job_id, url, "correcto", "Descarga completada")
+        titulo = self._extraer_titulo(url)
+        self.estado.actualizar(job_id, url, "correcto", "Descarga completada", titulo=titulo)

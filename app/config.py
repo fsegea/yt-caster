@@ -12,3 +12,11 @@ class Config(BaseSettings):
     @property
     def ruta_video(self) -> str:
         return f"{self.descargas_dir}/video.mp4"
+
+    @property
+    def ruta_info(self) -> str:
+        return f"{self.descargas_dir}/video.info.json"
+
+    @property
+    def historico_dir(self) -> str:
+        return f"{self.descargas_dir}/historico"

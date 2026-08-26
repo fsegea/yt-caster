@@ -494,6 +494,58 @@
             background: rgba(255, 71, 87, 0.1);
             color: var(--danger);
         }
+
+        /* Histórico */
+        .historico-guardar {
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+
+        .historico-lista {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .historico-vacio {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 0.5rem 0;
+        }
+
+        .historico-item {
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .historico-titulo {
+            font-size: 0.85rem;
+            font-weight: 600;
+            word-break: break-word;
+        }
+
+        .historico-fecha {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .historico-acciones {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .historico-acciones button {
+            flex: 1;
+            padding: 0.6rem;
+            font-size: 0.8rem;
+            min-height: 40px;
+        }
     </style>
 </head>
 <body>
@@ -580,6 +632,16 @@
         </div>
 
         <!-- Chromecast IP -->
+        <div class="card">
+            <div class="card-title">Histórico</div>
+            <button class="primary historico-guardar" id="btnGuardarHistorico" aria-label="Guardar vídeo actual en el histórico">
+                &#x2B50; Guardar vídeo actual
+            </button>
+            <div class="historico-lista" id="historicoLista">
+                <div class="historico-vacio">Cargando histórico...</div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-title">Dispositivo</div>
             <div class="ip-row">
@@ -783,6 +845,86 @@
             }
         }
 
+        // --- Histórico ---
+        function formatFecha(timestampSegundos) {
+            if (!timestampSegundos) return '';
+            const d = new Date(timestampSegundos * 1000);
+            return d.toLocaleString();
+        }
+
+        function escapeHtml(texto) {
+            const div = document.createElement('div');
+            div.textContent = texto ?? '';
+            return div.innerHTML;
+        }
+
+        async function cargarHistorico() {
+            const contenedor = document.getElementById('historicoLista');
+            try {
+                const data = await apiGet('/historico');
+                const videos = data.videos || [];
+
+                if (videos.length === 0) {
+                    contenedor.innerHTML = '<div class="historico-vacio">Todavía no hay vídeos guardados</div>';
+                    return;
+                }
+
+                contenedor.innerHTML = videos.map((v) => `
+                    <div class="historico-item" data-id="${v.id}">
+                        <div class="historico-titulo">${escapeHtml(v.titulo)}</div>
+                        <div class="historico-fecha">${formatFecha(v.fecha)}</div>
+                        <div class="historico-acciones">
+                            <button class="success historico-play" data-id="${v.id}" aria-label="Reproducir vídeo guardado">&#x25B6; Reproducir</button>
+                            <button class="danger historico-eliminar" data-id="${v.id}" aria-label="Eliminar vídeo guardado">&#x1F5D1; Eliminar</button>
+                        </div>
+                    </div>
+                `).join('');
+
+                contenedor.querySelectorAll('.historico-play').forEach((btn) => {
+                    btn.addEventListener('click', () => reproducirHistorico(btn.dataset.id));
+                });
+                contenedor.querySelectorAll('.historico-eliminar').forEach((btn) => {
+                    btn.addEventListener('click', () => eliminarHistorico(btn.dataset.id));
+                });
+            } catch (err) {
+                contenedor.innerHTML = '<div class="historico-vacio">Error al cargar el histórico</div>';
+            }
+        }
+
+        async function guardarEnHistorico() {
+            setLoading('btnGuardarHistorico', true);
+            try {
+                await apiPost('/historico');
+                toast('Vídeo guardado en el histórico', 'success');
+                await cargarHistorico();
+            } catch (err) {
+                toast('No se pudo guardar: descarga un vídeo primero', 'error');
+            } finally {
+                setLoading('btnGuardarHistorico', false);
+            }
+        }
+
+        async function reproducirHistorico(id) {
+            try {
+                await apiPost(`/historico/${id}/play`);
+                toast('Reproduciendo en Chromecast', 'success');
+            } catch (err) {
+                toast('Error al reproducir', 'error');
+            }
+        }
+
+        async function eliminarHistorico(id) {
+            if (!confirm('¿Eliminar este vídeo del histórico?')) return;
+            try {
+                const res = await fetch(`/historico/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                toast('Vídeo eliminado', 'success');
+                await cargarHistorico();
+            } catch (err) {
+                toast('Error al eliminar', 'error');
+            }
+        }
+
         // --- Event Listeners ---
         document.addEventListener('DOMContentLoaded', () => {
             // UI Bindings
@@ -796,6 +938,7 @@
             document.getElementById('btnFwd').addEventListener('click', () => sendRequest('/ffwd'));
             document.getElementById('btnSaveIp').addEventListener('click', setChromecastIp);
             document.getElementById('btnGoToPosition').addEventListener('click', sendSeek);
+            document.getElementById('btnGuardarHistorico').addEventListener('click', guardarEnHistorico);
 
             // Presets
             document.getElementById('preset0').addEventListener('click', () => setSeekTime(0));
@@ -821,6 +964,7 @@
             loadChromecastIp();
             loadVersion();
             updateSeekDisplay();
+            cargarHistorico();
         });
     </script>
 </body>
