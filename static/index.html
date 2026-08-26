@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromecast Controller</title>
+    <style>
+        :root {
+            --bg: #0f0f1a;
+            --card-bg: #1a1a2e;
+            --card-border: #2a2a4a;
+            --accent: #6c63ff;
+            --accent-hover: #5a52d5;
+            --danger: #ff4757;
+            --danger-hover: #e03e4d;
+            --success: #2ed573;
+            --success-hover: #26b862;
+            --text: #e8e8f0;
+            --text-muted: #8888a8;
+            --input-bg: #12122a;
+            --input-border: #2a2a4a;
+            --input-focus: #6c63ff;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        .app {
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.25rem;
+        }
+
+        .header h1 .icon {
+            margin-right: 0.5rem;
+        }
+
+        .header .subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+        }
+
+        .card-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        /* Inputs */
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .input-group input {
+            flex: 1;
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 0.8rem 0.9rem;
+            border: 1px solid var(--input-border);
+            border-radius: var(--radius-sm);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus {
+            border-color: var(--input-focus);
+        }
+
+        input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Buttons */
+        button {
+            padding: 0.8rem 1.2rem;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            color: var(--text);
+            background: var(--card-border);
+            min-height: 48px;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            button:hover:not(:disabled) {
+                filter: brightness(1.15);
+            }
+        }
+
+        button:active:not(:disabled) {
+            transform: scale(0.95);
+            filter: brightness(0.9);
+        }
+
+        button:focus {
+            outline: none;
+        }
+
+        button:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        button.primary {
+            background: var(--accent);
+        }
+
+        button.danger {
+            background: var(--danger);
+        }
+
+        button.success {
+            background: var(--success);
+            color: #000;
+        }
+
+        /* Playback grid */
+        .playback-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+        }
+
+        .playback-grid button {
+            padding: 0.8rem 0.4rem;
+            font-size: 0.8rem;
+            flex-direction: column;
+            gap: 0.3rem;
+            min-height: 56px;
+        }
+
+        .playback-grid .btn-icon {
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+        /* Volume row */
+        .volume-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .volume-row input[type="number"] {
+            width: 70px;
+            text-align: center;
+        }
+
+        .volume-row button {
+            flex: 1;
+        }
+
+        /* Seek row */
+        .seek-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .seek-row input[type="number"] {
+            width: 70px;
+            text-align: center;
+        }
+
+        .seek-row button {
+            flex: 1;
+        }
+
+        /* Pastilla de tiempo táctil */
+        .time-pill {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 1rem;
+        }
+
+        .time-pill-header {
+            text-align: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .time-pill-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .time-pill-display {
+            font-size: 2.5rem;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: 2px;
+        }
+
+        .time-pill-presets {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.4rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .time-pill-presets button {
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.6rem 0.3rem;
+            border-radius: var(--radius-sm);
+            min-height: 48px;
+        }
+
+        .time-pill-presets button:active {
+            background: var(--accent);
+            color: var(--text);
+        }
+
+        .time-pill-adjust {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            padding: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .time-pill-btn-minus,
+        .time-pill-btn-plus {
+            width: 3rem;
+            height: 3rem;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .time-pill-btn-minus {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .time-pill-btn-plus {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .time-pill-hint {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .time-pill-seek-btn {
+            width: 100%;
+            background: var(--success);
+            color: #000;
+            font-weight: 700;
+            padding: 0.8rem;
+            border-radius: var(--radius-sm);
+            min-height: 48px;
+        }
+
+        .time-pill-seek-btn:active {
+            filter: brightness(0.9);
+        }
+
+        /* Chromecast IP */
+        .ip-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .ip-row input {
+            flex: 1;
+        }
+
+        .ip-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--input-bg);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .ip-badge .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            transition: background 0.3s ease;
+        }
+
+        .dot.error {
+            background: var(--danger);
+        }
+
+        .dot.connected {
+            background: var(--success);
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        .toast {
+            padding: 0.7rem 1.2rem;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+            animation: toastIn 0.25s ease, toastOut 0.3s ease 2.5s forwards;
+            pointer-events: auto;
+            white-space: normal;
+            max-width: min(90vw, 420px);
+            text-align: center;
+            line-height: 1.35;
+        }
+
+        .toast.success {
+            background: var(--success);
+            color: #000;
+        }
+
+        .toast.error {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .toast.info {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes toastOut {
+            from { opacity: 1; }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+
+        /* Loading spinner */
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            body {
+                padding: 1rem 0.5rem;
+            }
+
+            .playback-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .time-pill-presets {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            input[type="text"],
+            input[type="number"] {
+                font-size: 16px;
+            }
+        }
+
+        .download-status {
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.8rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.82rem;
+            font-weight: 500;
+            line-height: 1.4;
+            min-height: 2.2rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .download-status.info {
+            background: rgba(108, 99, 255, 0.1);
+            color: var(--accent);
+        }
+
+        .download-status.success {
+            background: rgba(46, 213, 115, 0.1);
+            color: var(--success);
+        }
+
+        .download-status.error {
+            background: rgba(255, 71, 87, 0.1);
+            color: var(--danger);
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header">
+            <h1><span class="icon" aria-hidden="true">&#x1F4FA;</span> Chromecast Controller</h1>
+            <div class="subtitle" id="version">Cargando...</div>
+        </div>
+
+        <!-- Download -->
+        <div class="card">
+            <div class="card-title">Descargar video</div>
+            <div class="input-group">
+                <input type="text" id="videoUrl" placeholder="https://www.youtube.com/watch?v=..." aria-label="URL del video">
+                <button class="primary" id="btnDownload" aria-label="Descargar video">
+                    <span aria-hidden="true">&#x25B6;</span> Descargar
+                </button>
+            </div>
+            <div id="downloadStatus" class="download-status" style="display: none;"></div>
+        </div>
+
+        <!-- Playback -->
+        <div class="card">
+            <div class="card-title">Reproducción</div>
+            <div class="playback-grid">
+                <button id="btnPlay" aria-label="Reproducir">
+                    <span class="btn-icon" aria-hidden="true">&#x25B6;</span>
+                    Play
+                </button>
+                <button id="btnStop" class="danger" aria-label="Detener">
+                    <span class="btn-icon" aria-hidden="true">&#x25A0;</span>
+                    Stop
+                </button>
+                <button id="btnToggle" aria-label="Alternar reproducción">
+                    <span class="btn-icon" aria-hidden="true">&#x23EF;</span>
+                    Toggle
+                </button>
+            </div>
+        </div>
+
+        <!-- Volume -->
+        <div class="card">
+            <div class="card-title">Volumen</div>
+            <div class="volume-row">
+                <input type="number" id="volumeDelta" value="5" min="1" max="100" aria-label="Paso de volumen">
+                <button id="btnVolDown" aria-label="Bajar volumen">&#x1F507; Volumen -</button>
+                <button id="btnVolUp" aria-label="Subir volumen">&#x1F50A; Volumen +</button>
+            </div>
+        </div>
+
+        <!-- Seek -->
+        <div class="card">
+            <div class="card-title">Posición</div>
+            <div class="seek-row">
+                <input type="number" id="positionDelta" value="30" min="1" aria-label="Valor del desplazamiento">
+                <button id="btnRewind" aria-label="Retroceder">&#x23EA; Rewind</button>
+                <button id="btnFwd" aria-label="Avanzar">Forward &#x23E9;</button>
+            </div>
+
+            <!-- Pastilla táctil de tiempo -->
+            <div class="time-pill" style="margin-top: 0.75rem;">
+                <div class="time-pill-header">
+                    <span class="time-pill-label">Ir a posición</span>
+                    <div class="time-pill-display" id="seek-display">00:00</div>
+                </div>
+
+                <div class="time-pill-presets">
+                    <button id="preset0" aria-label="Ir al inicio">Inicio</button>
+                    <button id="preset1" aria-label="Ir a 1 minuto">1 min</button>
+                    <button id="preset2" aria-label="Ir a 3 minutos">3 min</button>
+                    <button id="preset3" aria-label="Ir a 5 minutos">5 min</button>
+                    <button id="preset4" aria-label="Ir a 10 minutos">10 min</button>
+                    <button id="preset5" aria-label="Ir a 15 minutos">15 min</button>
+                </div>
+
+                <div class="time-pill-adjust">
+                    <button id="btnSeekMinus" class="time-pill-btn-minus" aria-label="Restar 10 segundos">-10s</button>
+                    <span class="time-pill-hint">Ajuste fino</span>
+                    <button id="btnSeekPlus" class="time-pill-btn-plus" aria-label="Sumar 10 segundos">+10s</button>
+                </div>
+
+                <button id="btnGoToPosition" class="time-pill-seek-btn" aria-label="Ir a la posición seleccionada">Ir a posición</button>
+            </div>
+        </div>
+
+        <!-- Chromecast IP -->
+        <div class="card">
+            <div class="card-title">Dispositivo</div>
+            <div class="ip-row">
+                <input type="text" id="chromecastIp" placeholder="10.10.0.44" aria-label="Dirección IP del Chromecast">
+                <button id="btnSaveIp" class="primary" aria-label="Guardar IP">Guardar</button>
+            </div>
+            <div style="margin-top: 0.75rem;">
+                <span class="ip-badge">
+                    <span class="dot" id="statusDot"></span> 
+                    <span id="ipDisplay">—</span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // --- State ---
+        let seekSeconds = 0;
+
+        // --- Helpers ---
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            
+            if (h === 0) {
+                return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            }
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        function toast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.textContent = message;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+
+        function setLoading(btnId, loading) {
+            const btn = document.getElementById(btnId);
+            if (!btn) return;
+            if (loading) {
+                btn.dataset.original = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner"></span>';
+                btn.disabled = true;
+            } else {
+                btn.innerHTML = btn.dataset.original;
+                btn.disabled = false;
+            }
+        }
+
+        // --- API Communication ---
+        async function apiPost(endpoint, body = {}) {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        }
+
+        async function apiGet(endpoint) {
+            const res = await fetch(endpoint);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        }
+
+        // --- Business Logic ---
+        function updateSeekDisplay() {
+            document.getElementById('seek-display').innerText = formatTime(seekSeconds);
+        }
+
+        function setSeekTime(seconds) {
+            seekSeconds = seconds;
+            updateSeekDisplay();
+        }
+
+        function adjustSeekTime(seconds) {
+            seekSeconds += seconds;
+            if (seekSeconds < 0) seekSeconds = 0;
+            updateSeekDisplay();
+        }
+
+        async function sendSeek() {
+            const time = formatTime(seekSeconds);
+            try {
+                await apiPost('/seek', { time });
+                toast('Seek aplicado', 'success');
+            } catch (err) {
+                toast('Error al hacer seek', 'error');
+            }
+        }
+
+        async function loadChromecastIp() {
+            const dot = document.getElementById('statusDot');
+            try {
+                const data = await apiGet('/chromecast');
+                document.getElementById('chromecastIp').value = data.ip;
+                document.getElementById('ipDisplay').textContent = data.ip;
+                dot.className = 'dot connected';
+            } catch (err) {
+                console.error('Failed to load Chromecast IP:', err);
+                dot.className = 'dot error';
+            }
+        }
+
+        async function loadVersion() {
+            try {
+                const data = await apiGet('/version');
+                document.getElementById('version').textContent = `${data.version || 'versión desconocida'} · yt-dlp ${data.yt_dlp_version || 'desconocido'}`;
+            } catch (err) {
+                document.getElementById('version').textContent = 'versión desconocida';
+            }
+        }
+
+        async function setChromecastIp() {
+            const dot = document.getElementById('statusDot');
+            const ipInput = document.getElementById('chromecastIp');
+            const ip = ipInput.value.trim();
+            if (!ip) return toast('Ingresa una IP válida', 'error');
+
+            try {
+                await apiPost('/chromecast', { ip });
+                document.getElementById('ipDisplay').textContent = ip;
+                dot.className = 'dot connected';
+                toast('IP actualizada', 'success');
+            } catch (err) {
+                dot.className = 'dot error';
+                toast('Error al actualizar IP', 'error');
+            }
+        }
+
+        function sendDownload() {
+            const urlInput = document.getElementById('videoUrl');
+            const url = urlInput.value.trim();
+            if (!url) return toast('Ingresa una URL válida', 'error');
+
+            setLoading('btnDownload', true);
+            toast('Enviando petición de descarga...', 'info');
+
+            apiPost('/descargar', { url })
+                .then((resp) => {
+                    const job_id = resp.job_id;
+                    const statusEl = document.getElementById('downloadStatus');
+                    let polling = true;
+                    const estadosNoTerminales = new Set(['descargando']);
+
+                    function poll() {
+                        if (!polling) return;
+                        apiGet('/estado')
+                            .then((data) => {
+                                const job = data.job;
+                                if (!job || job.id !== job_id) return poll();
+
+                                statusEl.style.display = 'block';
+                                statusEl.className = 'download-status info';
+                                statusEl.textContent = job.mensaje || job.estado;
+
+                                if (estadosNoTerminales.has(job.estado)) {
+                                    setTimeout(poll, 1500);
+                                } else {
+                                    polling = false;
+                                    statusEl.className = 'download-status ' + (job.estado === 'correcto' ? 'success' : 'error');
+                                    statusEl.textContent = job.mensaje || job.estado;
+                                    toast(job.mensaje || job.estado, job.estado === 'correcto' ? 'success' : 'error');
+                                    setLoading('btnDownload', false);
+                                }
+                            })
+                            .catch(() => {
+                                if (polling) setTimeout(poll, 1500);
+                            });
+                    }
+
+                    poll();
+                })
+                .catch(() => {
+                    toast('Error al enviar la petición', 'error');
+                    setLoading('btnDownload', false);
+                });
+        }
+
+        async function sendRequest(endpoint) {
+            const body = {};
+            if (endpoint === '/volumeup' || endpoint === '/volumedown') {
+                body.delta = parseInt(document.getElementById('volumeDelta').value) || 5;
+            }
+            if (endpoint === '/ffwd' || endpoint === '/rewind') {
+                body.time = parseInt(document.getElementById('positionDelta').value) || 30;
+            }
+
+            try {
+                await apiPost(endpoint, body);
+                toast('OK', 'success');
+            } catch (err) {
+                toast('Error', 'error');
+            }
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // UI Bindings
+            document.getElementById('btnDownload').addEventListener('click', sendDownload);
+            document.getElementById('btnPlay').addEventListener('click', () => sendRequest('/play'));
+            document.getElementById('btnStop').addEventListener('click', () => sendRequest('/stop'));
+            document.getElementById('btnToggle').addEventListener('click', () => sendRequest('/play-toggle'));
+            document.getElementById('btnVolDown').addEventListener('click', () => sendRequest('/volumedown'));
+            document.getElementById('btnVolUp').addEventListener('click', () => sendRequest('/volumeup'));
+            document.getElementById('btnRewind').addEventListener('click', () => sendRequest('/rewind'));
+            document.getElementById('btnFwd').addEventListener('click', () => sendRequest('/ffwd'));
+            document.getElementById('btnSaveIp').addEventListener('click', setChromecastIp);
+            document.getElementById('btnGoToPosition').addEventListener('click', sendSeek);
+
+            // Presets
+            document.getElementById('preset0').addEventListener('click', () => setSeekTime(0));
+            document.getElementById('preset1').addEventListener('click', () => adjustSeekTime(60));
+            document.getElementById('preset2').addEventListener('click', () => adjustSeekTime(180));
+            document.getElementById('preset3').addEventListener('click', () => adjustSeekTime(300));
+            document.getElementById('preset4').addEventListener('click', () => adjustSeekTime(600));
+            document.getElementById('preset5').addEventListener('click', () => adjustSeekTime(900));
+
+            // Adjustments
+            document.getElementById('btnSeekMinus').addEventListener('click', () => adjustSeekTime(-10));
+            document.getElementById('btnSeekPlus').addEventListener('click', () => adjustSeekTime(10));
+
+            // Inputs Key Support
+            document.getElementById('videoUrl').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') sendDownload();
+            });
+            document.getElementById('chromecastIp').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') setChromecastIp();
+            });
+
+            // Initializations
+            loadChromecastIp();
+            loadVersion();
+            updateSeekDisplay();
+        });
+    </script>
+</body>
+</html>

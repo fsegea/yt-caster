@@ -1,0 +1,17 @@
+# Desarrollo: hot reload (uvicorn --reload) + montajes en vivo.
+# Uso: podman-compose up -d --build
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: yt-caster-dev
+    volumes:
+      - ./app:/app/app
+      - ./static:/app/static
+      - ./VERSION:/app/VERSION
+      - ./descargas:/descargas
+    network_mode: host
+    environment:
+      - CHROMECAST_IP=${CHROMECAST_IP:-10.10.0.44}
+    restart: unless-stopped
