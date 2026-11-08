@@ -8,3 +8,7 @@ requires-python = ">=3.12,<3.14"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# `pytest` a secas (el script de consola, como lo invoca el CI) no pone el raiz del
+# repo en sys.path, y `from app...` en los tests revienta con ModuleNotFoundError.
+# `python -m pytest` si lo pone (anade el CWD), por eso en local pasaba.
+pythonpath = ["."]

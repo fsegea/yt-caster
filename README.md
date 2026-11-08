@@ -150,6 +150,11 @@ docker inspect yt-caster --format '{{.Config.Image}} {{.Image}}'
   `app/__pycache__/*.cpython-312.pyc` junto a los `*.cpython-313.pyc` del `pytest` local.
   Es inocuo (Python descarta el `.pyc` con magic number ajeno y recompila), pero ensucia
   la imagen y tapaba que los tests no cubrían la versión de producción.
+- **`pytest` y `python -m pytest` no son lo mismo**: el script de consola no añade el
+  directorio actual a `sys.path`, así que `from app...` en los tests falla con
+  `ModuleNotFoundError: No module named 'app'`. En local se colaba porque se ejecutaba
+  `python -m pytest`. Lo destapó el CI (v1.3.2, run 2). Queda resuelto con
+  `pythonpath = ["."]` en `pyproject.toml`.
 
 ## Versionar yt-dlp
 
