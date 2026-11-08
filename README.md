@@ -64,7 +64,67 @@ podman-compose -f compose.prod.yaml up -d --build
 
 ### Portainer
 
-Usa `stack.portainer.yaml` (o la imagen `fsegea/yt-caster` en Docker Hub).
+Usa `stack.portainer.yaml`, que refleja el despliegue real. La imagen se referencia
+**por versión** (`fsegea/yt-caster:v1.3.1`), nunca con `latest`.
+
+## Publicar una versión
+
+1. Cambiar el código y pasar los tests: `pytest`
+2. Subir `VERSION` (una línea, p. ej. `v1.3.2`)
+3. Commitear, taggear y empujar:
+
+```bash
+git commit -a -m "v1.3.2: ..."
+git tag -a v1.3.2 -m "v1.3.2"
+git push origin main --tags
+```
+
+4. El CI (`.github/workflows/docker.yml`) construye y publica. La etiqueta de la imagen
+   sale del fichero `VERSION` del commit, no del nombre del tag de git.
+5. En Portainer, cambiar la etiqueta en el stack y *Redeploy*.
+
+**Regla: solo el CI publica imágenes.** Nadie hace `docker build` + `docker push` a mano.
+Si existe una imagen en Docker Hub, tiene que existir su commit y su tag en GitHub: la
+única forma de que vuelva a haber deriva de versiones es saltarse esta regla.
+
+El CI necesita dos secrets en el repositorio (Settings → Secrets and variables → Actions):
+
+| Secret | Valor |
+|--------|-------|
+| `DOCKERHUB_USERNAME` | `fsegea` |
+| `DOCKERHUB_TOKEN` | access token de hub.docker.com, ámbito **Read & Write** |
+
+## Despliegue en producción
+
+Host `vm0` (`10.10.0.100`), gestionado desde Portainer con el stack `yt-endpoint`.
+El fichero vivo es `stack.portainer.yaml`; debe mantenerse idéntico a lo desplegado.
+
+- Imagen fijada a una versión concreta, no `latest`.
+- Volumen `yt_descargas` montado en `/descargas`: ahí viven `video.mp4` y `historico/`.
+- `CHROMECAST_IP` por defecto `10.10.0.41` (Android TV). `10.10.0.44` es el Chromecast;
+  se cambia en caliente con `POST /chromecast`.
+- Verificar tras un despliegue:
+
+```bash
+curl -s http://10.10.0.100:8000/version
+docker inspect yt-caster --format '{{.Config.Image}} {{.Image}}'
+```
+
+## Trampas ya sufridas
+
+- **`latest` en el stack**: un redeploy te trae lo que Hub tenga en ese momento, y en
+  cambio `docker compose up -d` no vuelve a bajar la imagen si la etiqueta ya existe en
+  el host. Fijar la versión evita los dos problemas.
+- **Compose puede heredar la spec del contenedor anterior** al recrear (se vio con el
+  `CMD` de la imagen vieja sobreviviendo a un cambio de imagen). Si algo no cambia pese
+  a redeployar, borra el contenedor y vuelve a desplegar, o cambia algo del compose para
+  forzar un `config-hash` nuevo.
+- **Dos builds del mismo commit tienen digests distintos** (timestamps y attestation).
+  No compares digests entre maquinas: compara etiquetas.
+- **`.dockerignore` necesita prefijo `**/`** para los patrones anidados: `__pycache__/`
+  solo excluye el de la raiz, no `app/__pycache__`.
+- **`yt-dlp` sin fijar** hace que el contenedor cambie de comportamiento en cada arranque
+  sin commit ni tag. Ver siguiente apartado.
 
 ## Versionar yt-dlp
 
@@ -75,15 +135,12 @@ del mismo tag son iguales.
 Cuando YouTube rompa un extractor y haga falta subir la versión:
 
 ```bash
-# 1. subir el pin y comprobar que descarga
 sed -i 's/yt-dlp==.*/yt-dlp==2026.11.11/' requirements.txt
 pytest
-
-# 2. versionar, commitear, taggear y publicar
-git commit -a -m "yt-dlp 2026.11.11"
-git tag -a v1.3.2 -m "yt-dlp 2026.11.11"
-git push origin main --tags
 ```
+
+Y luego se sigue el flujo normal de *Publicar una versión* (subir `VERSION`, commitear,
+tagear y empujar).
 
 Si hace falta un apaño urgente sin reconstruir la imagen, arranca el contenedor con
 `YT_DLP_ACTUALIZAR=1` para que instale la última versión al levantar. Es la vía rápida
@@ -109,6 +166,8 @@ app/
   services/        # Lógica (descarga yt-dlp, control Chromecast, histórico, ficheros descargables)
 static/            # Frontend web
 tests/             # Tests pytest
+stack.portainer.yaml   # Stack de Portainer (despliegue real)
+.github/workflows/docker.yml  # CI: tag -> imagen en Docker Hub
 ```
 
 ## Descargar al cliente
