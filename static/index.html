@@ -537,13 +537,14 @@
 
         .historico-acciones {
             display: flex;
+            flex-wrap: wrap;
             gap: 0.5rem;
         }
 
         .historico-acciones button,
         .historico-acciones a {
-            flex: 1;
-            padding: 0.6rem;
+            flex: 1 1 40%;
+            padding: 0.6rem 0.4rem;
             font-size: 0.8rem;
             min-height: 40px;
         }
@@ -614,6 +615,47 @@
             color: var(--text-muted);
             text-align: center;
         }
+
+        .descarga-cliente button {
+            background: var(--accent);
+        }
+
+        /* Visor: reproducción en el propio navegador */
+        .visor {
+            width: 100%;
+            display: block;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            border-radius: var(--radius-sm);
+        }
+
+        .visor-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-top: 0.6rem;
+        }
+
+        .visor-titulo {
+            font-size: 0.85rem;
+            font-weight: 600;
+            word-break: break-word;
+        }
+
+        .visor-cerrar {
+            flex: 0 0 auto;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            min-height: 36px;
+        }
+
+        .visor-aviso {
+            margin-top: 0.6rem;
+            font-size: 0.78rem;
+            color: var(--danger);
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -634,9 +676,21 @@
             </div>
             <div id="downloadStatus" class="download-status" style="display: none;"></div>
             <div class="descarga-cliente" id="descargaCliente" style="display: none;">
+                <button id="btnVerEnNavegador" aria-label="Ver el vídeo del servidor en este dispositivo">&#x25B6; Ver en el navegador</button>
                 <a href="/video" id="btnDescargarCliente" aria-label="Descargar el vídeo del servidor a este dispositivo">&#x2B07; Descargar a este dispositivo</a>
                 <span class="descarga-cliente-info" id="descargaClienteInfo"></span>
             </div>
+        </div>
+
+        <!-- Visor -->
+        <div class="card" id="visorCard" style="display: none;">
+            <div class="card-title">Ver en el navegador</div>
+            <video class="visor" id="visor" controls playsinline preload="metadata"></video>
+            <div class="visor-info">
+                <span class="visor-titulo" id="visorTitulo"></span>
+                <button class="visor-cerrar" id="btnCerrarVisor" aria-label="Cerrar el visor">&#x2715; Cerrar</button>
+            </div>
+            <div class="visor-aviso" id="visorAviso" style="display: none;"></div>
         </div>
 
         <!-- Playback -->
@@ -734,6 +788,8 @@
     <script>
         // --- State ---
         let seekSeconds = 0;
+        let videoActualNombre = '';
+        let visorUrl = '';
 
         // --- Helpers ---
         function formatTime(seconds) {
@@ -938,17 +994,62 @@
             try {
                 const data = await apiGet('/video/info');
                 if (!data.disponible) {
+                    videoActualNombre = '';
                     bloque.style.display = 'none';
                     return;
                 }
+                videoActualNombre = data.nombre || 'Vídeo';
                 const tamano = formatTamano(data.tamano);
                 info.textContent = tamano
                     ? `Vídeo en el servidor · ${tamano}`
                     : 'Vídeo disponible en el servidor';
                 bloque.style.display = 'flex';
+
+                // Una descarga nueva sobreescribe video.mp4: si estábamos viéndolo, recargar.
+                if (visorUrl === '/video/ver') {
+                    abrirVisor('/video/ver', videoActualNombre);
+                }
             } catch (err) {
                 bloque.style.display = 'none';
             }
+        }
+
+        // --- Visor en el navegador ---
+        function abrirVisor(url, titulo) {
+            const card = document.getElementById('visorCard');
+            const video = document.getElementById('visor');
+            const aviso = document.getElementById('visorAviso');
+
+            visorUrl = url;
+            // video.mp4 se sobreescribe en cada descarga: el query evita servir la copia cacheada.
+            video.src = `${url}?v=${Date.now()}`;
+            document.getElementById('visorTitulo').textContent = titulo || 'Vídeo del servidor';
+            aviso.style.display = 'none';
+            card.style.display = 'block';
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            // El autoplay puede estar bloqueado por el navegador: los controles siempre valen.
+            const reproduciendo = video.play();
+            if (reproduciendo && reproduciendo.catch) reproduciendo.catch(() => {});
+        }
+
+        function cerrarVisor() {
+            const card = document.getElementById('visorCard');
+            const video = document.getElementById('visor');
+
+            visorUrl = '';
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+            card.style.display = 'none';
+        }
+
+        function mostrarAvisoVisor() {
+            const video = document.getElementById('visor');
+            if (!video.getAttribute('src')) return; // el aviso de cerrar no es un error de reproducción
+            const aviso = document.getElementById('visorAviso');
+            aviso.textContent = 'Este navegador no puede reproducir el vídeo (códec no soportado). Prueba a descargarlo.';
+            aviso.style.display = 'block';
         }
 
         // --- Histórico ---
@@ -962,6 +1063,10 @@
             const div = document.createElement('div');
             div.textContent = texto ?? '';
             return div.innerHTML;
+        }
+
+        function escapeAttr(texto) {
+            return escapeHtml(texto).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
         async function cargarHistorico() {
@@ -981,6 +1086,7 @@
                         <div class="historico-fecha">${formatFecha(v.fecha)}${v.tamano ? ` · ${formatTamano(v.tamano)}` : ''}</div>
                         <div class="historico-acciones">
                             <button class="success historico-play" data-id="${v.id}" aria-label="Reproducir vídeo guardado">&#x25B6; Reproducir</button>
+                            <button class="historico-ver" data-id="${v.id}" data-titulo="${escapeAttr(v.titulo)}" aria-label="Ver vídeo guardado en el navegador">&#x25A7; Ver</button>
                             <a class="historico-descargar" href="/historico/${v.id}/descargar" aria-label="Descargar vídeo guardado a este dispositivo">&#x2B07; Descargar</a>
                             <button class="danger historico-eliminar" data-id="${v.id}" aria-label="Eliminar vídeo guardado">&#x1F5D1; Eliminar</button>
                         </div>
@@ -989,6 +1095,9 @@
 
                 contenedor.querySelectorAll('.historico-play').forEach((btn) => {
                     btn.addEventListener('click', () => reproducirHistorico(btn.dataset.id));
+                });
+                contenedor.querySelectorAll('.historico-ver').forEach((btn) => {
+                    btn.addEventListener('click', () => abrirVisor(`/historico/${btn.dataset.id}/ver`, btn.dataset.titulo));
                 });
                 contenedor.querySelectorAll('.historico-eliminar').forEach((btn) => {
                     btn.addEventListener('click', () => eliminarHistorico(btn.dataset.id));
@@ -1046,6 +1155,9 @@
             document.getElementById('btnSaveIp').addEventListener('click', setChromecastIp);
             document.getElementById('btnGoToPosition').addEventListener('click', sendSeek);
             document.getElementById('btnGuardarHistorico').addEventListener('click', guardarEnHistorico);
+            document.getElementById('btnVerEnNavegador').addEventListener('click', () => abrirVisor('/video/ver', videoActualNombre));
+            document.getElementById('btnCerrarVisor').addEventListener('click', cerrarVisor);
+            document.getElementById('visor').addEventListener('error', mostrarAvisoVisor);
 
             // Presets
             document.getElementById('preset0').addEventListener('click', () => setSeekTime(0));

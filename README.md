@@ -9,6 +9,7 @@ API (FastAPI) que descarga vídeos de YouTube con `yt-dlp` y los reproduce en un
 - Controles de reproducción: play, stop, pause, volumen, avance/retroceso, seek.
 - Histórico de vídeos descargados: guardar, listar, reproducir y eliminar.
 - **Descarga al cliente**: envía al navegador un vídeo ya descargado en el servidor (el actual o cualquiera del histórico), sin volver a buscarlo a YouTube.
+- **Ver en el navegador**: reproduce ese mismo vídeo en una tarjeta `<video>` de la propia página, sin bajarlo a disco y sin pasar por el Chromecast.
 - Frontend web en `static/index.html`.
 - Healthcheck y versión.
 
@@ -22,6 +23,7 @@ API (FastAPI) que descarga vídeos de YouTube con `yt-dlp` y los reproduce en un
 | `POST` | `/descargar` | `{url}` — descarga el vídeo en segundo plano, devuelve `job_id` |
 | `GET` | `/estado` | Estado de la descarga actual |
 | `GET` | `/video` | Descarga en el cliente el vídeo descargado actualmente en el servidor |
+| `GET` | `/video/ver` | Sirve ese vídeo en línea (`inline`) para reproducirlo en el navegador |
 | `GET` | `/video/info` | `{disponible, nombre, tamano}` del vídeo disponible para descargar |
 | `GET` | `/chromecast` | IP del Chromecast configurada |
 | `POST` | `/chromecast` | `{ip}` — cambia la IP del Chromecast |
@@ -37,6 +39,7 @@ API (FastAPI) que descarga vídeos de YouTube con `yt-dlp` y los reproduce en un
 | `POST` | `/historico` | Guarda el vídeo descargado actualmente en el histórico |
 | `GET` | `/historico` | Lista los vídeos guardados (`{videos: [...]}`) |
 | `GET` | `/historico/{entry_id}/descargar` | Descarga en el cliente un vídeo del histórico |
+| `GET` | `/historico/{entry_id}/ver` | Reproduce en el navegador un vídeo del histórico |
 | `POST` | `/historico/{entry_id}/play` | Reproduce un vídeo del histórico en el Chromecast |
 | `DELETE` | `/historico/{entry_id}` | Elimina un vídeo del histórico |
 
@@ -197,6 +200,7 @@ app/
   deps.py          # Dependencias
   routers/         # Rutas (frontend, salud, descarga, chromecast, controles, histórico)
   services/        # Lógica (descarga yt-dlp, control Chromecast, histórico, ficheros descargables)
+  responses.py     # Respuestas de vídeo al cliente (inline / attachment)
 static/            # Frontend web
 tests/             # Tests pytest
 AGENTS.md          # Reglas del repo para herramientas de desarrollo (pi lo carga solo)
@@ -206,13 +210,30 @@ stack.portainer.yaml   # Stack de Portainer (despliegue real)
 .github/workflows/docker.yml  # CI: tests 3.12+3.13 -> tag -> imagen en Docker Hub
 ```
 
-## Descargar al cliente
+## Descargar o ver en el navegador
 
 `GET /video` y `GET /historico/{entry_id}/descargar` devuelven el fichero con
 `Content-Disposition: attachment`, así que el navegador lo guarda sin recargarlo
 desde YouTube. El nombre se deriva del título del vídeo, sanitizado (sin acentos
 ni caracteres problemáticos).
 
-Las respuestas aceptan `Range`, así que el navegador puede descargar en paralelo
-o reproducir el vídeo mientras se baja. El botón «Descargar a este dispositivo»
-aparece en el frontend cuando `GET /video/info` informa de un vídeo disponible.
+`GET /video/ver` y `GET /historico/{entry_id}/ver` devuelven el mismo fichero con
+`Content-Disposition: inline`: el navegador lo reproduce en la tarjeta «Ver en el
+navegador» de la página en lugar de guardarlo. En el histórico hay un botón «Ver»
+por vídeo; para el vídeo actual, el botón «Ver en el navegador» aparece junto al de
+descarga cuando `GET /video/info` informa de uno disponible.
+
+Las cuatro rutas aceptan `Range` (responden `206` con `Content-Range` y anuncian
+`Accept-Ranges: bytes`), así que el navegador puede descargar en paralelo y, sobre
+todo, buscar (seek) dentro del vídeo sin bajarlo entero. Eso lo resuelve
+`FileResponse` de Starlette; `app/responses.py:respuesta_video()` es el único sitio
+donde se decide `inline` frente a `attachment`.
+
+Un par de detalles del visor:
+
+- El `src` lleva un `?v=<timestamp>`: `video.mp4` se sobreescribe en cada descarga y
+  sin eso el navegador puede seguir mostrando la copia cacheada.
+- Si el navegador no puede reproducir el códec aparece un aviso y queda la vía de
+  la descarga. Puede pasar con el fallback del selector de formato de `yt-dlp`
+  (`best[height<=720]`), que remuxa a MP4 pistas VP9/Opus que no todos los
+  navegadores decodifican.

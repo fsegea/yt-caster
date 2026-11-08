@@ -1,10 +1,10 @@
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from fastapi.responses import FileResponse
 
 from app.deps import get_archivo_service, get_descarga_service, get_estado
 from app.models import SolicitudVideo
+from app.responses import respuesta_video
 from app.services.archivo import ArchivoService
 from app.services.download import DescargaService
 from app.state import EstadoApp
@@ -44,11 +44,24 @@ async def descargar_video(
             detail="No hay ningún vídeo descargado en el servidor",
         )
 
-    return FileResponse(
-        archivo.ruta,
-        media_type="video/mp4",
-        filename=archivo.nombre,
-    )
+    return respuesta_video(archivo, inline=False)
+
+
+@router.get("/video/ver")
+async def ver_video(
+    estado: EstadoApp = Depends(get_estado),
+    archivo_service: ArchivoService = Depends(get_archivo_service),
+):
+    """Sirve el vídeo descargado para reproducirlo en el navegador, sin descargarlo."""
+    job = estado.get_estado() or {}
+    archivo = archivo_service.video_actual(job.get("titulo", ""))
+    if archivo is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay ningún vídeo descargado en el servidor",
+        )
+
+    return respuesta_video(archivo, inline=True)
 
 
 @router.get("/video/info")

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from fastapi.responses import FileResponse
 
 from app.config import Config
 from app.deps import (
@@ -9,6 +8,7 @@ from app.deps import (
     get_estado,
     get_historico_service,
 )
+from app.responses import respuesta_video
 from app.services.archivo import ArchivoService
 from app.services.chromecast import ChromecastService
 from app.services.historico import HistoricoService
@@ -67,7 +67,20 @@ async def descargar_historico(
     if archivo is None:
         raise HTTPException(status_code=404, detail="Vídeo no encontrado en el histórico")
 
-    return FileResponse(archivo.ruta, media_type="video/mp4", filename=archivo.nombre)
+    return respuesta_video(archivo, inline=False)
+
+
+@router.get("/historico/{entry_id}/ver")
+async def ver_historico(
+    entry_id: str,
+    archivo_service: ArchivoService = Depends(get_archivo_service),
+):
+    """Reproduce en el navegador un vídeo guardado en el histórico."""
+    archivo = archivo_service.video_historico(entry_id)
+    if archivo is None:
+        raise HTTPException(status_code=404, detail="Vídeo no encontrado en el histórico")
+
+    return respuesta_video(archivo, inline=True)
 
 
 @router.post("/historico/{entry_id}/play")
