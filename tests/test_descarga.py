@@ -83,6 +83,32 @@ def test_descarga_error_sin_video(tmp_path):
     )
 
 
+def test_comando_de_descarga_usa_player_client_de_produccion(tmp_path):
+    """Regresión: este flag está en producción desde v1.2.1 y no debe perderse."""
+    config = Config(descargas_dir=str(tmp_path), chromecast_ip="10.0.0.1")
+    estado = EstadoApp(ip_chromecast="10.0.0.1")
+    servicio = DescargaService(config, estado)
+    estado.actualizar("job1", "https://example.com/v", "descargando", "...")
+
+    proc = ProcesoFalso(returncode=0)
+    comandos = []
+
+    async def crear_proceso(*args, **kwargs):
+        comandos.append(list(args))
+        (tmp_path / "video.mp4").write_bytes(b"datos")
+        return proc
+
+    with patch(
+        "app.services.download.asyncio.create_subprocess_exec",
+        side_effect=crear_proceso,
+    ):
+        asyncio.run(servicio.descargar("https://example.com/v", "job1"))
+
+    cmd = comandos[0]
+    i = cmd.index("--extractor-args")
+    assert cmd[i + 1] == "youtube:player_client=android"
+
+
 def test_progreso_se_reconoce():
     m = PROGRESO_RE.search("[download]  12.5% of 10.00MiB at 2.00MiB/s")
     assert m is not None

@@ -90,6 +90,7 @@ class DescargaService:
             "--merge-output-format", "mp4",
             "-o", self.config.ruta_video,
             "--write-info-json",
+            "--extractor-args", "youtube:player_client=android",
             "--newline",
             "--progress",
             "--", url,
