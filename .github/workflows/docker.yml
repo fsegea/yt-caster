@@ -1,0 +1,42 @@
+name: Build and publish image
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # La etiqueta de la imagen sale del fichero VERSION del commit,
+      # asi que imagen y codigo no pueden divergir.
+      - name: Determinar etiqueta
+        id: ver
+        run: echo "tag=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Construir y publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.prod
+          push: true
+          platforms: linux/amd64
+          tags: |
+            fsegea/yt-caster:${{ steps.ver.outputs.tag }}
+            fsegea/yt-caster:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
