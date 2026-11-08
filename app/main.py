@@ -6,6 +6,7 @@ from app.state import EstadoApp
 from app.services.chromecast import ChromecastService
 from app.services.download import DescargaService
 from app.services.historico import HistoricoService
+from app.services.archivo import ArchivoService
 from app.routers import frontend, download, controls, chromecast, health, historico
 
 
@@ -15,12 +16,14 @@ def create_app(
     descarga_service: DescargaService | None = None,
     chromecast_service: ChromecastService | None = None,
     historico_service: HistoricoService | None = None,
+    archivo_service: ArchivoService | None = None,
 ) -> FastAPI:
     config = config or Config()
     estado = estado or EstadoApp(ip_chromecast=config.chromecast_ip)
     descarga_service = descarga_service or DescargaService(config, estado)
     chromecast_service = chromecast_service or ChromecastService(config, estado)
     historico_service = historico_service or HistoricoService(config)
+    archivo_service = archivo_service or ArchivoService(config, historico_service)
 
     app = FastAPI()
     app.state.config = config
@@ -28,6 +31,7 @@ def create_app(
     app.state.descarga_service = descarga_service
     app.state.chromecast_service = chromecast_service
     app.state.historico_service = historico_service
+    app.state.archivo_service = archivo_service
 
     app.mount("/static", StaticFiles(directory=config.static_dir), name="static")
 

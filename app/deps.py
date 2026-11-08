@@ -5,6 +5,7 @@ from app.state import EstadoApp
 from app.services.chromecast import ChromecastService
 from app.services.download import DescargaService
 from app.services.historico import HistoricoService
+from app.services.archivo import ArchivoService
 
 
 def get_config(request: Request) -> Config:
@@ -25,3 +26,7 @@ def get_chromecast_service(request: Request) -> ChromecastService:
 
 def get_historico_service(request: Request) -> HistoricoService:
     return request.app.state.historico_service
+
+
+def get_archivo_service(request: Request) -> ArchivoService:
+    return request.app.state.archivo_service

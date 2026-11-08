@@ -540,11 +540,79 @@
             gap: 0.5rem;
         }
 
-        .historico-acciones button {
+        .historico-acciones button,
+        .historico-acciones a {
             flex: 1;
             padding: 0.6rem;
             font-size: 0.8rem;
             min-height: 40px;
+        }
+
+        .historico-acciones a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.3rem;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            text-decoration: none;
+            background: var(--accent);
+            color: var(--text);
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            .historico-acciones a:hover {
+                filter: brightness(1.15);
+            }
+        }
+
+        .historico-acciones a:active {
+            transform: scale(0.95);
+            filter: brightness(0.9);
+        }
+
+        /* Descarga del vídeo del servidor al cliente */
+        .descarga-cliente {
+            margin-top: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .descarga-cliente a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            padding: 0.8rem 1.2rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-decoration: none;
+            min-height: 48px;
+            background: var(--success);
+            color: #000;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            .descarga-cliente a:hover {
+                filter: brightness(1.15);
+            }
+        }
+
+        .descarga-cliente a:active {
+            transform: scale(0.95);
+            filter: brightness(0.9);
+        }
+
+        .descarga-cliente-info {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            text-align: center;
         }
     </style>
 </head>
@@ -565,6 +633,10 @@
                 </button>
             </div>
             <div id="downloadStatus" class="download-status" style="display: none;"></div>
+            <div class="descarga-cliente" id="descargaCliente" style="display: none;">
+                <a href="/video" id="btnDescargarCliente" aria-label="Descargar el vídeo del servidor a este dispositivo">&#x2B07; Descargar a este dispositivo</a>
+                <span class="descarga-cliente-info" id="descargaClienteInfo"></span>
+            </div>
         </div>
 
         <!-- Playback -->
@@ -813,6 +885,7 @@
                                     statusEl.textContent = job.mensaje || job.estado;
                                     toast(job.mensaje || job.estado, job.estado === 'correcto' ? 'success' : 'error');
                                     setLoading('btnDownload', false);
+                                    refrescarVideoDescargable();
                                 }
                             })
                             .catch(() => {
@@ -845,6 +918,39 @@
             }
         }
 
+        // --- Descarga al cliente ---
+        function formatTamano(bytes) {
+            if (!bytes && bytes !== 0) return '';
+            if (bytes < 1024) return `${bytes} B`;
+            const unidades = ['KB', 'MB', 'GB'];
+            let valor = bytes / 1024;
+            let i = 0;
+            while (valor >= 1024 && i < unidades.length - 1) {
+                valor /= 1024;
+                i += 1;
+            }
+            return `${valor.toFixed(1)} ${unidades[i]}`;
+        }
+
+        async function refrescarVideoDescargable() {
+            const bloque = document.getElementById('descargaCliente');
+            const info = document.getElementById('descargaClienteInfo');
+            try {
+                const data = await apiGet('/video/info');
+                if (!data.disponible) {
+                    bloque.style.display = 'none';
+                    return;
+                }
+                const tamano = formatTamano(data.tamano);
+                info.textContent = tamano
+                    ? `Vídeo en el servidor · ${tamano}`
+                    : 'Vídeo disponible en el servidor';
+                bloque.style.display = 'flex';
+            } catch (err) {
+                bloque.style.display = 'none';
+            }
+        }
+
         // --- Histórico ---
         function formatFecha(timestampSegundos) {
             if (!timestampSegundos) return '';
@@ -872,9 +978,10 @@
                 contenedor.innerHTML = videos.map((v) => `
                     <div class="historico-item" data-id="${v.id}">
                         <div class="historico-titulo">${escapeHtml(v.titulo)}</div>
-                        <div class="historico-fecha">${formatFecha(v.fecha)}</div>
+                        <div class="historico-fecha">${formatFecha(v.fecha)}${v.tamano ? ` · ${formatTamano(v.tamano)}` : ''}</div>
                         <div class="historico-acciones">
                             <button class="success historico-play" data-id="${v.id}" aria-label="Reproducir vídeo guardado">&#x25B6; Reproducir</button>
+                            <a class="historico-descargar" href="/historico/${v.id}/descargar" aria-label="Descargar vídeo guardado a este dispositivo">&#x2B07; Descargar</a>
                             <button class="danger historico-eliminar" data-id="${v.id}" aria-label="Eliminar vídeo guardado">&#x1F5D1; Eliminar</button>
                         </div>
                     </div>
@@ -965,6 +1072,7 @@
             loadVersion();
             updateSeekDisplay();
             cargarHistorico();
+            refrescarVideoDescargable();
         });
     </script>
 </body>

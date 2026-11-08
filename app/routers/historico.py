@@ -1,7 +1,15 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import FileResponse
 
 from app.config import Config
-from app.deps import get_chromecast_service, get_config, get_estado, get_historico_service
+from app.deps import (
+    get_archivo_service,
+    get_chromecast_service,
+    get_config,
+    get_estado,
+    get_historico_service,
+)
+from app.services.archivo import ArchivoService
 from app.services.chromecast import ChromecastService
 from app.services.historico import HistoricoService
 from app.state import EstadoApp
@@ -47,6 +55,19 @@ async def eliminar_historico(
     if not historico_service.eliminar(entry_id):
         raise HTTPException(status_code=404, detail="Vídeo no encontrado en el histórico")
     return {"status": "ok"}
+
+
+@router.get("/historico/{entry_id}/descargar")
+async def descargar_historico(
+    entry_id: str,
+    archivo_service: ArchivoService = Depends(get_archivo_service),
+):
+    """Envía al cliente un vídeo guardado en el histórico."""
+    archivo = archivo_service.video_historico(entry_id)
+    if archivo is None:
+        raise HTTPException(status_code=404, detail="Vídeo no encontrado en el histórico")
+
+    return FileResponse(archivo.ruta, media_type="video/mp4", filename=archivo.nombre)
 
 
 @router.post("/historico/{entry_id}/play")
