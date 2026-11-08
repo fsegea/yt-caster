@@ -6,6 +6,9 @@ class Config(BaseSettings):
     chromecast_ip: str = "10.10.0.44"
     static_dir: str = "static"
     ruta_version: str = "VERSION"
+    # Cliente de YouTube que se pasa a yt-dlp. `tv_base` expone el ladder DASH
+    # (136+140) que usa el selector de formato; `android` solo exponia el 18.
+    yt_dlp_player_client: str = "tv_base"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

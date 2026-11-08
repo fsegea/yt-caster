@@ -1,4 +1,5 @@
 import asyncio
+import glob
 import json
 import os
 import re
@@ -9,6 +10,13 @@ from app.config import Config
 from app.state import EstadoApp
 
 PROGRESO_RE = re.compile(r"\[download\]\s+(\d+(?:\.\d+)?)%")
+
+# Residuos que yt-dlp deja cuando una descarga se interrumpe o falla. El problema es
+# el `.part`: yt-dlp reanuda desde su offset si el nombre de salida coincide, asi que
+# la descarga siguiente de OTRO video reintenta desde ese offset y YouTube responde
+# 416 (`unable to download video data: HTTP Error 416`).
+# Patrones aplicados al prefijo del nombre de salida (`video` en `video.mp4`).
+RESIDUOS_YTDLP = ("*.part", "*.part-Frag*", "*.ytdl", ".f*")
 
 
 class DescargaService:
@@ -36,10 +44,21 @@ class DescargaService:
         self.estado.limpiar_proceso(proc)
 
     def _borrar_video_si_existe(self) -> None:
-        if os.path.exists(self.config.ruta_video):
-            os.remove(self.config.ruta_video)
-        if os.path.exists(self.config.ruta_info):
-            os.remove(self.config.ruta_info)
+        """Borra el video anterior y los residuos de descargas previas.
+
+        Solo borra ficheros derivados del nombre de salida (`video.*`): el
+        subdirectorio `historico/` y cualquier otro fichero del volumen se quedan.
+        """
+        stem = os.path.splitext(os.path.basename(self.config.ruta_video))[0]
+        rutas = {self.config.ruta_video, self.config.ruta_info}
+        for patron in RESIDUOS_YTDLP:
+            rutas.update(glob.glob(f"{self.config.descargas_dir}/{stem}{patron}"))
+
+        for ruta in rutas:
+            try:
+                os.remove(ruta)
+            except OSError:
+                pass
 
     def _extraer_titulo(self, url: str) -> str:
         try:
@@ -90,7 +109,8 @@ class DescargaService:
             "--merge-output-format", "mp4",
             "-o", self.config.ruta_video,
             "--write-info-json",
-            "--extractor-args", "youtube:player_client=android",
+            "--extractor-args",
+            f"youtube:player_client={self.config.yt_dlp_player_client}",
             "--newline",
             "--progress",
             "--", url,

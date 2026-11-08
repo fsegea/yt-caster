@@ -83,15 +83,14 @@ def test_descarga_error_sin_video(tmp_path):
     )
 
 
-def test_comando_de_descarga_usa_player_client_de_produccion(tmp_path):
-    """Regresión: este flag está en producción desde v1.2.1 y no debe perderse."""
-    config = Config(descargas_dir=str(tmp_path), chromecast_ip="10.0.0.1")
+def _comando_de_descarga(config: Config, tmp_path) -> list[str]:
+    """Devuelve el argv con el que DescargaService invoca yt-dlp."""
     estado = EstadoApp(ip_chromecast="10.0.0.1")
     servicio = DescargaService(config, estado)
     estado.actualizar("job1", "https://example.com/v", "descargando", "...")
 
     proc = ProcesoFalso(returncode=0)
-    comandos = []
+    comandos: list[list[str]] = []
 
     async def crear_proceso(*args, **kwargs):
         comandos.append(list(args))
@@ -104,9 +103,130 @@ def test_comando_de_descarga_usa_player_client_de_produccion(tmp_path):
     ):
         asyncio.run(servicio.descargar("https://example.com/v", "job1"))
 
-    cmd = comandos[0]
+    return comandos[0]
+
+
+def test_comando_de_descarga_usa_el_player_client_por_defecto(tmp_path):
+    """Regresión: `tv_base` es el cliente por defecto desde v1.4.1.
+
+    Con `android`, YouTube solo exponia el formato progresivo 18 y cortaba ese
+    unico flujo a ~700 KB en videos largos. `tv_base` si expone el ladder DASH
+    (136+140) que el selector de formato prefiere, y eso exige ffmpeg para fusionar.
+    """
+    cmd = _comando_de_descarga(
+        Config(descargas_dir=str(tmp_path), chromecast_ip="10.0.0.1"), tmp_path
+    )
     i = cmd.index("--extractor-args")
-    assert cmd[i + 1] == "youtube:player_client=android"
+    assert cmd[i + 1] == "youtube:player_client=tv_base"
+
+
+def test_player_client_se_puede_sobrescribir(tmp_path):
+    """El cliente es configuable: admite una lista separada por comas."""
+    cmd = _comando_de_descarga(
+        Config(
+            descargas_dir=str(tmp_path),
+            chromecast_ip="10.0.0.1",
+            yt_dlp_player_client="tv_base,android",
+        ),
+        tmp_path,
+    )
+    i = cmd.index("--extractor-args")
+    assert cmd[i + 1] == "youtube:player_client=tv_base,android"
+
+
+def test_player_client_lecturado_del_entorno(monkeypatch):
+    monkeypatch.setenv("YT_DLP_PLAYER_CLIENT", "android")
+    assert Config().yt_dlp_player_client == "android"
+
+
+def test_selector_de_formato_prefiere_avc1_mas_m4a(tmp_path):
+    """El selector debe seguir pidiendo video+audio decodificables en el navegador."""
+    cmd = _comando_de_descarga(
+        Config(descargas_dir=str(tmp_path), chromecast_ip="10.0.0.1"), tmp_path
+    )
+    i = cmd.index("-f")
+    assert cmd[i + 1] == (
+        "bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+        "/best[height<=720]"
+    )
+    assert cmd[cmd.index("--merge-output-format") + 1] == "mp4"
+
+
+def _descarga_con_residuos(tmp_path, residuos: list[str]) -> dict[str, list[str]]:
+    """Ejecuta una descarga dejando residuos antes de arrancar.
+
+    Devuelve el contenido de `descargas_dir` (rutas relativas) justo antes de invocar
+    yt-dlp y al terminar.
+    """
+    config = Config(descargas_dir=str(tmp_path), chromecast_ip="10.0.0.1")
+    estado = EstadoApp(ip_chromecast="10.0.0.1")
+    servicio = DescargaService(config, estado)
+    estado.actualizar("job1", "https://example.com/v", "descargando", "...")
+
+    for nombre in residuos:
+        ruta = tmp_path / nombre
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_bytes(b"restos")
+
+    def listar() -> list[str]:
+        return sorted(
+            str(p.relative_to(tmp_path))
+            for p in tmp_path.rglob("*")
+            if p.is_file()
+        )
+
+    proc = ProcesoFalso(returncode=0, stdout=(b"[download] 100% of 1.00MiB\n",))
+    snapshot: dict[str, list[str]] = {}
+
+    async def crear_proceso(*args, **kwargs):
+        snapshot["antes"] = listar()
+        (tmp_path / "video.mp4").write_bytes(b"datos")
+        return proc
+
+    with patch(
+        "app.services.download.asyncio.create_subprocess_exec",
+        side_effect=crear_proceso,
+    ):
+        asyncio.run(servicio.descargar("https://example.com/v", "job1"))
+
+    snapshot["despues"] = listar()
+    return snapshot
+
+
+def test_residuos_de_un_fallo_previo_se_limpian_antes_de_descargar(tmp_path):
+    """Regresión: un `video.mp4.part` de un fallo anterior hacia que yt-dlp
+    reintentara desde ese offset en la descarga siguiente (de OTRO video) y YouTube
+    respondiera `HTTP Error 416: Requested range not satisfiable`.
+    """
+    residuos = [
+        "video.mp4.part",
+        "video.mp4.part-Frag1.part",
+        "video.f136.mp4.part",
+        "video.f136.mp4",
+        "video.f140-1.m4a.part",
+        "video.info.json",
+    ]
+    snapshot = _descarga_con_residuos(tmp_path, residuos)
+
+    # Nada mas entrar en yt-dlp ya no queda ni un `.part` que reanudar.
+    assert snapshot["antes"] == []
+    assert snapshot["despues"] == ["video.mp4"]
+
+
+def test_limpiar_residuos_no_toca_el_historico_ni_otros_ficheros(tmp_path):
+    """La limpieza solo alcanza a `video.*`: lo demas del volumen es ajeno."""
+    ajenos = [
+        "historico/abc123.mp4",
+        "historico/abc123.json",
+        "otros.mp4",
+        "otros.mp4.part",
+    ]
+    snapshot = _descarga_con_residuos(tmp_path, ajenos + ["video.mp4.part"])
+
+    for nombre in ajenos:
+        assert nombre in snapshot["antes"]
+        assert nombre in snapshot["despues"]
+    assert "video.mp4.part" not in snapshot["antes"]
 
 
 def test_progreso_se_reconoce():

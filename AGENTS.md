@@ -37,6 +37,12 @@ El README es la fuente larga; aqui solo las reglas que hay que cumplir sin discu
 
 - Fijada en `requirements.txt` (`yt-dlp==YYYY.M.D`). Subirla va con commit y tag.
 - `YT_DLP_ACTUALIZAR=1` es un apaño temporal y no auditable: no dejarlo en el stack.
+- El cliente de YouTube es `YT_DLP_PLAYER_CLIENT`, por defecto `tv_base`. No volver a
+  `android`: solo exponía el progresivo 18 y YouTube cortaba ese flujo en vídeos largos.
+- Fusionar pistas DASH necesita `ffmpeg` (los Dockerfiles lo instalan; en el venv del host
+  hay que instalarlo a mano). Sin `ffmpeg` el selector cae al fallback progresivo.
+- La limpieza previa de `/descargas` debe borrar tambien `video*.part` y `video.f*`: un
+  residuo hace que la descarga siguiente falle con `HTTP 416`.
 
 ## Despliegue
 

@@ -49,6 +49,7 @@ API (FastAPI) que descarga vídeos de YouTube con `yt-dlp` y los reproduce en un
 |----------|-------------|-------------|
 | `CHROMECAST_IP` | `10.10.0.44` | IP del Chromecast |
 | `DESCARGAS_DIR` | `/descargas` | Directorio donde se guardan los vídeos |
+| `YT_DLP_PLAYER_CLIENT` | `tv_base` | Cliente de YouTube que usa `yt-dlp` (`youtube:player_client=...`) |
 | `YT_DLP_ACTUALIZAR` | `0` | Si vale `1`, el contenedor instala la última `yt-dlp` al arrancar |
 
 ## Ejecución
@@ -158,6 +159,19 @@ docker inspect yt-caster --format '{{.Config.Image}} {{.Image}}'
   `ModuleNotFoundError: No module named 'app'`. En local se colaba porque se ejecutaba
   `python -m pytest`. Lo destapó el CI (v1.3.2, run 2). Queda resuelto con
   `pythonpath = ["."]` en `pyproject.toml`.
+- **`player_client=android` con vídeos largos**: ese cliente solo exponía el formato
+  progresivo `18`, y YouTube cortaba ese flujo único a ~700 KB (`Got error: 0 bytes read,
+  10 MB more expected`, 10 reintentos y `La descarga falló`). Los vídeos cortos pasaban,
+  así que el fallo parecía intermitente. Desde v1.4.1 el cliente es configurable y por
+  defecto `tv_base`, que sí expone el ladder DASH (`136+140`) y baja los 255 MB de un
+  vídeo de 31 minutos sin problemas. Ver apartado *Cliente de YouTube*.
+- **Un `.part` huérfano envenenaba la descarga siguiente**: tras un fallo se quedaban
+  `video.mp4.part` (y `video.f136.mp4.part`, `video.info.json`) en `/descargas`, y
+  `_borrar_video_si_existe()` solo limpiaba `video.mp4` y `video.info.json`. Como el
+  nombre de salida es siempre el mismo, `yt-dlp` reanudaba desde ese offset aunque el
+  vídeo nuevo fuera otro: `[download] Resuming download at byte 653312` seguido de
+  `HTTP Error 416: Requested range not satisfiable`. Desde v1.4.1 la limpieza alcanza a
+  `video*.part`, `video*.part-Frag*`, `video*.ytdl` y `video.f*`, y no toca `historico/`.
 
 ## Versionar yt-dlp
 
@@ -178,6 +192,34 @@ tagear y empujar).
 Si hace falta un apaño urgente sin reconstruir la imagen, arranca el contenedor con
 `YT_DLP_ACTUALIZAR=1` para que instale la última versión al levantar. Es la vía rápida
 y no auditable: úsala solo como parche temporal y luego fija el pin en un commit.
+
+## Cliente de YouTube (`player_client`)
+
+`DescargaService` pasa `--extractor-args youtube:player_client=<cliente>` con el valor
+de `YT_DLP_PLAYER_CLIENT`, por defecto **`tv_base`** (desde v1.4.1; antes estaba fijado
+a `android`).
+
+Importa porque cada cliente ve un inventario distinto de formatos y **solo algunos
+devuelven URLs usable**s:
+
+| Cliente | Qué expone |
+|---------|------------|
+| `tv_base` | ladder DASH completo: `136` (720p `avc1`) + `140` (`m4a`), `134`, `160`, `249/250`… |
+| `android` | el progresivo `18` (360p, un único flujo) y nada más |
+| `web`, `mweb`, `ios`, `android_vr` | nada descargable sin PO token / por el experimento SABR-only |
+
+El selector de formato prefiere `bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]`,
+que **solo es realizable con un cliente que exponga DASH**: con `android` caía siempre al
+fallback `best[height<=720]` = `18`. Fusionar esas dos pistas requiere `ffmpeg`, que ya
+instalan `Dockerfile.dev` y `Dockerfile.prod`; en el venv del host hay que tenerlo a mano
+(`ffdl install`, `apt install ffmpeg`…). Sin `ffmpeg`, `yt-dlp` descarta el `136+140` y
+vuelve al progresivo.
+
+Se puede cambiar sin tocar código, admitiendo lista separada por comas:
+
+```bash
+YT_DLP_PLAYER_CLIENT=tv_base,android   # prueba varios clientes y mezcla formatos
+```
 
 ## Tests
 

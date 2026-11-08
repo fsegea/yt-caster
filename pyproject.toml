@@ -3,7 +3,7 @@
 # de tests del CI. El CI comprueba ademas que `version` cuadra con el fichero VERSION.
 [project]
 name = "yt-caster"
-version = "1.4.0"
+version = "1.4.1"
 requires-python = ">=3.12,<3.14"
 
 [tool.pytest.ini_options]
