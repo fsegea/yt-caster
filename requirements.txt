@@ -3,5 +3,5 @@ uvicorn[standard]
 pydantic
 pydantic-settings
 catt
-yt-dlp
+yt-dlp==2026.10.26
 watchfiles

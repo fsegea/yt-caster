@@ -46,6 +46,7 @@ API (FastAPI) que descarga vídeos de YouTube con `yt-dlp` y los reproduce en un
 |----------|-------------|-------------|
 | `CHROMECAST_IP` | `10.10.0.44` | IP del Chromecast |
 | `DESCARGAS_DIR` | `/descargas` | Directorio donde se guardan los vídeos |
+| `YT_DLP_ACTUALIZAR` | `0` | Si vale `1`, el contenedor instala la última `yt-dlp` al arrancar |
 
 ## Ejecución
 
@@ -64,6 +65,29 @@ podman-compose -f compose.prod.yaml up -d --build
 ### Portainer
 
 Usa `stack.portainer.yaml` (o la imagen `fsegea/yt-caster` en Docker Hub).
+
+## Versionar yt-dlp
+
+`yt-dlp` va **fijado** en `requirements.txt` (ahora mismo `2026.10.26`), así que la
+versión empaquetada queda ligada a un commit y a un tag de la imagen: dos despliegues
+del mismo tag son iguales.
+
+Cuando YouTube rompa un extractor y haga falta subir la versión:
+
+```bash
+# 1. subir el pin y comprobar que descarga
+sed -i 's/yt-dlp==.*/yt-dlp==2026.11.11/' requirements.txt
+pytest
+
+# 2. versionar, commitear, taggear y publicar
+git commit -a -m "yt-dlp 2026.11.11"
+git tag -a v1.3.2 -m "yt-dlp 2026.11.11"
+git push origin main --tags
+```
+
+Si hace falta un apaño urgente sin reconstruir la imagen, arranca el contenedor con
+`YT_DLP_ACTUALIZAR=1` para que instale la última versión al levantar. Es la vía rápida
+y no auditable: úsala solo como parche temporal y luego fija el pin en un commit.
 
 ## Tests
 

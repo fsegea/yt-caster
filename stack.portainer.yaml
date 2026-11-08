@@ -8,6 +8,7 @@ services:
     network_mode: host
     environment:
       - CHROMECAST_IP=${CHROMECAST_IP:-10.10.0.44}
+      - YT_DLP_ACTUALIZAR=0
     volumes:
       - yt_descargas:/descargas
     healthcheck:
