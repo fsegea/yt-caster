@@ -65,12 +65,31 @@ podman-compose -f compose.prod.yaml up -d --build
 ### Portainer
 
 Usa `stack.portainer.yaml`, que refleja el despliegue real. La imagen se referencia
-**por versión** (`fsegea/yt-caster:v1.3.1`), nunca con `latest`.
+**por versión** (`fsegea/yt-caster:v1.3.2`), nunca con `latest`.
+
+## Versión de Python
+
+La versión soportada es **3.12 o 3.13** (`requires-python = ">=3.12,<3.14"`). Lo que
+corre en producción es lo que declara `pyproject.toml`, y está declarado en un solo sitio
+para que no vuelva a divergir:
+
+| Dónde | Versión |
+|-------|---------|
+| `pyproject.toml` (`requires-python`) | `>=3.12,<3.14` |
+| `.python-version` (venv de desarrollo) | `3.13` |
+| `Dockerfile.dev` / `Dockerfile.prod` (builder y runtime) | `python:3.13-slim` |
+| Matriz de tests del CI | `3.12` y `3.13` |
+
+Hasta `v1.3.1` los contenedores corrían en 3.12 mientras los tests solo se ejecutaban
+en el 3.13 del puesto de desarrollo, y el CI no ejecutaba tests: nada garantizaba que la
+imagen publicada funcionase en el intérprete en el que corría. Ahora el job `test` es
+`needs` obligatorio del job `build`.
 
 ## Publicar una versión
 
 1. Cambiar el código y pasar los tests: `pytest`
-2. Subir `VERSION` (una línea, p. ej. `v1.3.2`)
+2. Subir `VERSION` (una línea, p. ej. `v1.3.2`) **y el campo `version` de `pyproject.toml`**
+   (el CI aborta si no cuadran)
 3. Commitear, taggear y empujar:
 
 ```bash
@@ -79,8 +98,9 @@ git tag -a v1.3.2 -m "v1.3.2"
 git push origin main --tags
 ```
 
-4. El CI (`.github/workflows/docker.yml`) construye y publica. La etiqueta de la imagen
-   sale del fichero `VERSION` del commit, no del nombre del tag de git.
+4. El CI (`.github/workflows/docker.yml`) ejecuta los tests en 3.12 y 3.13, comprueba que
+   `VERSION` y `pyproject.toml` cuadran, y entonces construye y publica. La etiqueta de la
+   imagen sale del fichero `VERSION` del commit, no del nombre del tag de git.
 5. En Portainer, cambiar la etiqueta en el stack y *Redeploy*.
 
 **Regla: solo el CI publica imágenes.** Nadie hace `docker build` + `docker push` a mano.
@@ -125,6 +145,11 @@ docker inspect yt-caster --format '{{.Config.Image}} {{.Image}}'
   solo excluye el de la raiz, no `app/__pycache__`.
 - **`yt-dlp` sin fijar** hace que el contenedor cambie de comportamiento en cada arranque
   sin commit ni tag. Ver siguiente apartado.
+- **Dos Python conviviendo sin declararlo**: el venv local era 3.13 y los contenedores
+  3.12. Como `compose.yaml` monta `./app:/app/app`, el contenedor escribía
+  `app/__pycache__/*.cpython-312.pyc` junto a los `*.cpython-313.pyc` del `pytest` local.
+  Es inocuo (Python descarta el `.pyc` con magic number ajeno y recompila), pero ensucia
+  la imagen y tapaba que los tests no cubrían la versión de producción.
 
 ## Versionar yt-dlp
 
@@ -153,6 +178,9 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+El CI ejecuta esos mismos tests en Python 3.12 y 3.13 en cada tag, en cada PR y en cada
+`workflow_dispatch`, y no publica la imagen si alguno falla.
+
 ## Estructura
 
 ```
@@ -166,8 +194,10 @@ app/
   services/        # Lógica (descarga yt-dlp, control Chromecast, histórico, ficheros descargables)
 static/            # Frontend web
 tests/             # Tests pytest
+pyproject.toml     # requires-python y version (debe cuadrar con VERSION)
+.python-version    # 3.13: version del venv de desarrollo
 stack.portainer.yaml   # Stack de Portainer (despliegue real)
-.github/workflows/docker.yml  # CI: tag -> imagen en Docker Hub
+.github/workflows/docker.yml  # CI: tests 3.12+3.13 -> tag -> imagen en Docker Hub
 ```
 
 ## Descargar al cliente

@@ -2,7 +2,7 @@
 # Uso: en Portainer -> Stacks -> Add stack, pega este contenido (o sube el archivo).
 services:
   app:
-    image: fsegea/yt-caster:v1.3.1
+    image: fsegea/yt-caster:v1.3.2
     container_name: yt-caster
     restart: unless-stopped
     network_mode: host
