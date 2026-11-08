@@ -199,6 +199,7 @@ app/
   services/        # Lógica (descarga yt-dlp, control Chromecast, histórico, ficheros descargables)
 static/            # Frontend web
 tests/             # Tests pytest
+AGENTS.md          # Reglas del repo para herramientas de desarrollo (pi lo carga solo)
 pyproject.toml     # requires-python y version (debe cuadrar con VERSION)
 .python-version    # 3.13: version del venv de desarrollo
 stack.portainer.yaml   # Stack de Portainer (despliegue real)
