@@ -1,7 +1,24 @@
+# Los patrones de .dockerignore se evaluan contra la ruta relativa a la raiz del
+# contexto de build: "__pycache__/" solo excluye el de la raiz, NO app/__pycache__.
+# Por eso los patrones anidados llevan prefijo **/.
+#
+# Sin esto, "COPY app ./app" del Dockerfile.prod embarcaba en la imagen
+# app/app/__pycache__/*.cpython-312.pyc y *.cpython-313.pyc (ocurria en v1.2.2).
+
 .venv/
+**/.venv/
+
 __pycache__/
+**/__pycache__/
 *.pyc
+**/*.pyc
+
 .pytest_cache/
+**/.pytest_cache/
+
 .git/
 descargas/
+**/descargas/
+
 .env
+**/.env
