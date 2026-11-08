@@ -68,7 +68,7 @@ podman-compose -f compose.prod.yaml up -d --build
 ### Portainer
 
 Usa `stack.portainer.yaml`, que refleja el despliegue real. La imagen se referencia
-**por versión** (`fsegea/yt-caster:v1.3.2`), nunca con `latest`.
+**por versión** (`fsegea/yt-caster:v1.4.0`), nunca con `latest`.
 
 ## Versión de Python
 
