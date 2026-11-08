@@ -2,12 +2,12 @@
 # Uso: en Portainer -> Stacks -> Add stack, pega este contenido (o sube el archivo).
 services:
   app:
-    image: fsegea/yt-caster:v1.2.2
+    image: fsegea/yt-caster:v1.3.1
     container_name: yt-caster
     restart: unless-stopped
     network_mode: host
     environment:
-      - CHROMECAST_IP=${CHROMECAST_IP:-10.10.0.44}
+      - CHROMECAST_IP=${CHROMECAST_IP:-10.10.0.41}
       - YT_DLP_ACTUALIZAR=0
     volumes:
       - yt_descargas:/descargas
